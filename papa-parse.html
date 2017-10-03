@@ -1,0 +1,486 @@
+<link rel="import" href="../polymer/polymer-element.html">
+<link rel="import" href="../polymer/lib/utils/debounce.html">
+
+<link rel="import" href="./papaparse.html">
+
+<!--
+`papa-parse` is a Polymer 2.0 element to parse CSV files into JSON object(s)
+with [Papa parse](http://papaparse.com/).
+
+`papa-parse` can download and parse a csv file via `url`, or from raw csv strings
+via `raw`, and File object via `file`. If the `auto` flag is set, `papa-parse`
+will automatically start the job, otherwise a manual call to the function `parse`
+will be needed.
+
+Parse from URL.
+```html
+<papa-parse auto url="MOCK_DATA.csv" rows="{{rows}}"></papa-parse>
+```
+
+Parse from raw csv String.
+```html
+<papa-parse auto raw="[[SomeCsvString]]" rows="{{rows}}"></papa-parse>
+```
+
+Parse from FileReader
+```html
+<input id="selectfile" type="file"></input>
+<papa-parse auto file="[[file]]" rows="{{rows}}"></papa-parse>
+```
+```javascript
+this.$.selectfile
+  .addEventListener('change', function(e) {
+    this.file = e.target.files[0];
+  });
+```
+
+There are 2 possible outputs for `rows` - an *array of array of values*, or an
+*array of objects*. An array of array is returned if the `header` flag is not
+set, and an array of objects otherwise, where each object is a map comprising
+of the column name and its corresponding value for the row
+(e.g. {col1: value1, col2: value2}).
+
+### Handling big files
+Parsing is synchronous and may block the UI thread (i.e. freeze the screen) if
+the csv file is big. Parsing with a web-worker via `worker` flag is recommended
+for big file. However, note that `papaparse.min.js` *should not be bundled*
+during the build process if web-worker is required as the web-worker needs to
+load the script. You will also need to correctly reference the location of the
+script via the `script-path` attribute.
+
+You should not use relative path if parsing from `url`, as the web-worker may
+load from an incorrect path.
+
+```html
+<papa-parse auto header worker stream
+  script-path="../../papaparse/papaparse.min.js"
+  fields="{{fields}}"
+  url="https://some.domain/some.csv"
+  on-stream="handleRecord"></papa-parse>
+```
+```javascript
+function handleRecord(e, {data, meta, errors}) {
+  console.log(data);
+}
+```
+
+Streaming via `stream` flag is also recommended for big file (`stream` and
+`worker` are not dependent on each other). However, when `stream` flag is set,
+`rows` attribute will only return an empty array as none of the records will be
+persisted. Instead, `papa-parse` will emit an `stream` event of the form
+{{data: Array[]|Object[], meta: Object, errors: Array, parser: Object}} for each
+record parsed.
+
+```html
+<button onclick="javascript:start()">[[buttonLabel]]</button>
+
+<papa-parse id="parser"
+  stream
+  url="MOCK_DATA.csv"
+  rows="{{rows}}"
+  on-stream="handleRecord"></papa-parse>
+```
+```javascript
+function start() {
+  app.$.parser.start();
+}
+
+function handleRecord(e, {data, meta, errors}) {
+  alert(JSON.stringify(data));
+  app.$.parser.pause();
+}
+```
+
+
+@customElement
+@polymer
+@demo demo/index.html
+-->
+<dom-module id="papa-parse">
+<script>
+class PapaParse extends Polymer.Element {
+  static get is() {
+    return 'papa-parse';
+  }
+  static get properties() {
+    return {
+      /**
+       * whether to automatically parse the CSV whenever input and config is set or updated.
+       * @type {Boolean}
+       */
+      auto: {
+        type: Boolean
+      },
+      /**
+       * url to the csv to download and parse.
+       * @type {String}
+       */
+      url: {
+        type: String
+      },
+      /**
+       * raw string content of the csv.
+       * @type {String}
+       */
+      raw: {
+        type: String
+      },
+      /**
+       * CSV File object from FileReader API.
+       * @type {String}
+       */
+      file: {
+        type: Object
+      },
+      /**
+       * The delimiting character. Leave blank to auto-detect.
+       * @type {String}
+       */
+      delimiter: {
+        type: String,
+        value: ''
+      },
+      /**
+       * The newline sequence. Leave blank to auto-detect.
+       * Must be one of \r, \n, or \r\n.
+       * @type {String}
+       */
+      newline: {
+        type: String,
+        value: ''
+      },
+      /**
+       * The character used to quote fields.
+       * The quoting of all fields is not mandatory.
+       * Any field which is not quoted will correctly read.
+       * @type {String}
+       */
+      quoteChar: {
+        type: String,
+        value: ''
+      },
+      /**
+       * If true, the first row of parsed data will be interpreted as field
+       * names. Each row of data will be an object of values keyed by field
+       * name instead of a simple array. Rows with a different number of
+       * fields from the header row will produce an error.
+       *
+       * Warning: Duplicate field names will overwrite values in previous
+       * fields having the same name.
+       * @type {Boolean}
+       */
+      header: {
+        type: Boolean,
+        value: false
+      },
+      /**
+       * If true, numeric and boolean data will be converted to their type
+       * instead of remaining strings. Numeric data must conform to the
+       * definition of a decimal literal. European-formatted numbers must
+       * have commas and dots swapped.
+       * @type {Boolean}
+       */
+      dynamicTyping: {
+        type: Boolean,
+        value: false
+      },
+      /**
+       * If > 0, only that many rows will be parsed.
+       * @type {Number}
+       */
+      preview: {
+        type: Number,
+        value: 0
+      },
+      /**
+       * The encoding to use when opening local files.
+       * If specified, it must be a value supported by the FileReader API.
+       * @type {String}
+       */
+      encoding: {
+        type: String,
+        value: null
+      },
+      /**
+       * A string that indicates a comment (for example, "#" or "//").
+       * When Papa encounters a line starting with this string, it will
+       * skip the line.
+       * @type {String}
+       */
+      comments: {
+        type: String,
+        value: null
+      },
+      /**
+       * If true, lines that are completely empty will be skipped.
+       * An empty line is defined to be one which evaluates to empty string.
+       * @type {String}
+       */
+      skipEmptyLines: {
+        type: Boolean,
+        value: false
+      },
+      /**
+       * Fast mode speeds up parsing significantly for large inputs.
+       * However, it only works when the input has no quoted fields.
+       * Fast mode will automatically be enabled if no " characters appear
+       * in the input.
+       * @type {Boolean}
+       */
+      fastMode: {
+        type: Boolean,
+        value: false
+      },
+      /**
+       * A boolean value passed directly into XMLHttpRequest's
+       * "withCredentials" property.
+       * @type {Boolean}
+       */
+      withCredentials: {
+        type: Boolean,
+        value: false
+      },
+      /**
+       * Whether preview consumed all input.
+       * @type {Object}
+       */
+      truncated: {
+        type: Boolean,
+        notify: true
+      },
+      /**
+       * Whether or not to use a worker thread. Using a worker will keep your
+       * page reactive, but may be slightly slower. Web Workers also load the
+       * entire Javascript file, so be careful when combining other libraries
+       * in the same file as Papa Parse. Note that worker option is only
+       * available when parsing files and not when converting from JSON to CSV.
+       *
+       * http://papaparse.com/faq#combine
+       * @type {Boolean}
+       */
+      worker: {
+        type: Boolean,
+        value: false
+      },
+      /**
+       * whether to stream the CSV instead. A `each-record` event will be
+       * dispatch for each record parsed. Note that `rows` will be empty if
+       * `stream` is true, as no parsed records will be retained.
+       *
+       * @event stream
+       * @param {{data: Array[]|Object[], meta: Object, errors: Array, parser: Object}} results You can call parser.abort() to abort parsing. And, except when using a Web Worker, you can call parser.pause() to pause it, and parser.resume() to resume.
+       *
+       * @type {Boolean}
+       */
+      stream: {
+        type: Boolean,
+        value: false
+      },
+      /**
+       * data is an array of rows. If header is false, rows are arrays;
+       * otherwise they are objects of data keyed by the field name.
+       * @type {Array[]|Object[]}
+       */
+      rows: {
+        type: Array,
+        notify: true
+      },
+      /**
+       * array of errors.
+       *
+       * http://papaparse.com/docs#errors
+       * @type {Array}
+       */
+      errors: {
+        type: Array,
+        notify: true
+      },
+      /**
+       * column names of the CSV.
+       *
+       * @type {String[]}
+       */
+      fields: {
+        type: Array,
+        notify: true
+      },
+      /**
+       * Papa parse needs the path to the script in order for webworker to work.
+       * Note that during your build process, papaparse.min.js should not be
+       * pack together if you want to use webworker as the script needs to be
+       * loaded in the webworker.
+       * @type {String}
+       */
+      scriptPath: {
+        type: String,
+        value: '../papaparse/papaparse.min.js'
+      },
+      /**
+       * @type {Polymer.Debouncer}
+       */
+      _debounceJob: {
+        type: Object
+      },
+      _config: {
+        type: Object,
+        value: function() {
+          return {};
+        }
+      },
+      _attached: {
+        type: Boolean
+      },
+      _parser: {
+        type: Object
+      }
+    };
+  }
+
+  static get observers() {
+    return [
+      '_updateConfig(delimiter, newline, quoteChar, header, dynamicTyping, preview, encoding, comments, skipEmptyLines, fastMode, withCredentials, worker, stream, scriptPath, _attached)',
+      '_parseUrl(url, _config, auto)',
+      '_parseFile(file, _config, auto)',
+      '_parseRaw(raw, _config, auto)'
+    ];
+  }
+
+  connectedCallback() {
+    super.connectedCallback();
+    this._attached = true;
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this._attached = false;
+  }
+
+  _updateConfig() {
+    if (!this._attached) return;
+
+    this._debounceJob = Polymer.Debouncer.debounce(
+      this._debounceJob,
+      Polymer.Async.microTask,
+      () => {
+        if (this.worker) Papa.SCRIPT_PATH = this.scriptPath;
+
+        this._config = {
+          delimiter: this.delimiter,
+          newline: this.newline,
+          quoteChar: this.quoteChar,
+          header: this.header,
+          step: this.stream ? this._step.bind(this) : undefined,
+          dynamicTyping: this.dynamicTyping,
+          preview: this.preview,
+          encoding: this.encoding,
+          comments: this.comments,
+          skipEmptyLines: this.skipEmptyLines,
+          fastMode: this.fastMode,
+          worker: this.worker,
+          withCredentials: this.withCredentials
+        };
+      }
+    );
+  }
+
+  /**
+   * If `auto` flag is not set, use this function to start the job manually.
+   * Will resume parsing instead if parsing was paused previously.
+   * Only return results if `raw` is being parsed.
+   * @return {Array[]|Object[]|undefined}
+   */
+  start() {
+    if (this.stream && this._parser) return this.resume();
+    if (this.raw) return this._parseRaw(this.raw, this._config, true);
+    if (this.url) return this._parseUrl(this.url, this._config, true);
+    if (this.file) return this._parseFile(this.file, this._config, true);
+  }
+
+  /**
+   * resume parsing. Valid only if `stream` flag is set. Not applicable if
+   * `worker` flag as pause/resume is not possible in a web-worker thread.
+   */
+  resume() {
+    // web-worker does not have pause/resume functionality
+    if (this.worker || !this.stream || !this._parser) return;
+    this._parser.resume();
+  }
+
+  /**
+   * pause parsing. Valid only if `stream` flag is set. Not applicable if
+   * `worker` flag as pause/resume is not possible in a web-worker thread.
+   */
+  pause() {
+    // web-worker does not have pause/resume functionality
+    if (this.worker || !this.stream || !this._parser) return;
+    this._parser.pause();
+  }
+
+  /**
+   * abort parsing job. Valid only if `stream` flag is set.
+   */
+  abort() {
+    if (!this.stream || !this._parser) return;
+    this._parser.abort();
+  }
+
+  _parseRaw(raw, _config, run) {
+    if (!raw || !this._attached || !run) return;
+    var results = Papa.parse(raw, _config);
+    this._syncProperties(results);
+    return results;
+  }
+
+  _parseFile(file, _config, run) {
+    if (!file || !this._attached || !run) return;
+    var config = Object.assign(
+      {complete: this._complete.bind(this)},
+      this._config
+    );
+
+    Papa.parse(file, config);
+  }
+
+  _parseUrl(url, _config, run) {
+    if (!url || !this._attached || !run) return;
+    var config = Object.assign(
+      {download: true, complete: this._complete.bind(this)},
+      this._config
+    );
+
+    Papa.parse(url, config);
+  }
+
+  _syncProperties(results) {
+    if (!results) return;
+    this.rows = results.data || [];
+    this.fields = results.meta.fields;
+    // this.delimiter = results.meta.delimiter || this.delimiter;
+    // this.newline = results.meta.linebreak || this.newline;
+    this.truncated = results.meta.truncated || this.truncated;
+    this.errors = results.errors || [];
+    this._parser = null;
+  }
+
+  _step(results, parser) {
+    this._parser = parser;
+    this.dispatchEvent(new CustomEvent('stream', {detail: results}));
+  }
+
+  _complete(results) {
+    this._syncProperties(results);
+
+    if (this.errors && this.errors.length > 0)
+      return this.dispatchEvent(new CustomEvent('errored', {detail: results}));
+
+    if (results && results.meta && results.meta.aborted)
+      return this.dispatchEvent(new CustomEvent('aborted', {detail: results}));
+
+    if (results)
+      this.dispatchEvent(new CustomEvent('completed', {detail: results}));
+  }
+}
+
+window.customElements.define(PapaParse.is, PapaParse);
+</script>
+</dom-module>

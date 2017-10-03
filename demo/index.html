@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, minimum-scale=1, initial-scale=1, user-scalable=yes">
+
+  <title>papa-parse demo</title>
+
+  <script src="../../webcomponentsjs/webcomponents-lite.js"></script>
+
+  <link rel="import" href="../../polymer/lib/elements/dom-bind.html">
+  <link rel="import" href="../../polymer/lib/elements/dom-repeat.html">
+  <link rel="import" href="../../iron-demo-helpers/demo-pages-shared-styles.html">
+  <link rel="import" href="../../iron-demo-helpers/demo-snippet.html">
+  <link rel="import" href="../papa-parse.html">
+
+  <custom-style>
+    <style is="custom-style" include="demo-pages-shared-styles">
+      table {
+        font-size: 11px;
+        background-color: #ddd;
+      }
+      tr {
+        height: 11px;
+      }
+      .indent {
+        padding-left: 10px;
+      }
+    </style>
+  </custom-style>
+</head>
+<body>
+<div class="vertical-section-container centered">
+<h3>Basic papa-parse demo</h3>
+
+Read from URL without header
+<demo-snippet>
+  <template>
+    <dom-bind>
+      <template>
+        <!-- parse from url without header, rows is an array of array -->
+        <papa-parse auto url="MOCK_DATA.csv" rows="{{rows}}"></papa-parse>
+        <!-- skip empty lines -->
+        <papa-parse auto skip-empty-lines url="MOCK_DATA.csv" rows="{{rows_noblanks}}"></papa-parse>
+        <!-- there is 1 blank row -->
+        <div>no. rows w blanks = [[rows.length]]</div>
+        <!-- there is no blank row -->
+        <div>no. rows w/o blanks = [[rows_noblanks.length]]</div>
+        <!-- Render as a table with dom-repeat -->
+        <table>
+          <template is="dom-repeat" items="[[rows]]" as="row">
+            <tr>
+              <template is="dom-repeat" items="[[row]]">
+                <td>[[item]]</td>
+              </template>
+            </tr>
+          </template>
+        </table>
+      </template>
+    </dom-bind>
+  </template>
+</demo-snippet>
+
+Read from file with header
+<demo-snippet>
+<template>
+<input id="file2" type="file"></input>
+
+<dom-bind id="demo2">
+  <template>
+    <!--
+      parse csv from url with header, rows is an array of objects
+      automatically parse once file is selected
+    -->
+    <papa-parse auto header fields="{{fields}}" file="[[file]]" rows="{{rows}}"></papa-parse>
+    <!-- there is no blank row now -->
+    <div>no. rows = [[rows.length]]</div>
+    <!-- Render as a table with dom-repeat -->
+    <table>
+      <!-- header -->
+      <thead>
+        <template is="dom-repeat" items="[[fields]]">
+          <th>[[item]]</th>
+        </template>
+      </thead>
+      <!-- rows -->
+      <template is="dom-repeat" items="[[rows]]" as="row">
+        <tr>
+          <template is="dom-repeat" items="[[fields]]" as="key">
+            <td>[[at(row, key)]]</td>
+          </template>
+        </tr>
+      </template>
+    </table>
+  </template>
+</dom-bind>
+<script>
+var demo2 = document.querySelector('dom-bind#demo2');
+demo2.at = function(a, i) {
+  return a[i];
+};
+document.querySelector('input#file2').addEventListener('change', function(e) {
+  demo2.file = e.target.files[0];
+});
+</script>
+</template>
+</demo-snippet>
+
+Read from raw string
+<demo-snippet>
+<template>
+<dom-bind id="demo3">
+  <template>
+    <!--
+      parse csv from string with header, rows is an array of objects
+    -->
+    <papa-parse auto header fields="{{fields}}" raw="[[raw]]" rows="{{rows}}"></papa-parse>
+    <div>no. rows = [[rows.length]]</div>
+    <!-- Render as a table with dom-repeat -->
+    <table>
+      <!-- header -->
+      <thead>
+        <template is="dom-repeat" items="[[fields]]">
+          <th>[[item]]</th>
+        </template>
+      </thead>
+      <!-- rows -->
+      <template is="dom-repeat" items="[[rows]]" as="row">
+        <tr>
+          <template is="dom-repeat" items="[[fields]]" as="key">
+            <td>[[at(row, key)]]</td>
+          </template>
+        </tr>
+      </template>
+    </table>
+  </template>
+</dom-bind>
+<script>
+var demo3 = document.querySelector('dom-bind#demo3');
+demo3.at = function(a, i) {
+  return a[i];
+};
+
+demo3.raw = `id,first_name,last_name,email,gender,ip_address
+1,Sheree,Bonniface,sbonniface0@altervista.org,Female,214.100.85.55
+2,Rickey,McClintock,rmcclintock1@walmart.com,Male,106.217.13.41
+3,Bevvy,Orneles,borneles2@wsj.com,Female,200.42.161.215
+4,Meaghan,Penwell,mpenwell3@friendfeed.com,Female,91.176.235.148
+5,Othello,Jarmyn,ojarmyn4@twitpic.com,Male,94.240.223.236
+6,Svend,Lempel,slempel5@linkedin.com,Male,124.105.128.32
+7,Petronilla,Trippitt,ptrippitt6@virginia.edu,Female,67.251.226.133
+8,Christoph,Tapp,ctapp7@ted.com,Male,115.163.62.175
+9,Ethelbert,McShirie,emcshirie8@mediafire.com,Male,29.161.251.48
+10,Lea,Canny,lcanny9@miibeian.gov.cn,Female,80.251.197.178`;
+</script>
+</template>
+</demo-snippet>
+
+Streaming
+<demo-snippet>
+<template>
+<dom-bind id="demo4">
+  <template>
+    <button onclick="javascript:start()">[[buttonLabel]]</button>
+    <div>no. of rows = [[rows.length]]</div>
+    <!--
+      manual trigger of streaming.
+      `rows` will be zero as records are not persisted.
+    -->
+    <papa-parse id="parser" stream
+      url="MOCK_DATA.csv"
+      rows="{{rows}}"
+      on-stream="handleRecord"></papa-parse>
+
+  </template>
+</dom-bind>
+<script>
+var demo4 = document.querySelector('dom-bind#demo4');
+
+demo4.buttonLabel = 'Start';
+demo4.handleRecord = function(e, info) {
+  var next = confirm(
+    `Record: ${info.data[0].join(', ')}
+Next record?`
+  );
+  // pause stream
+  if (!next) {
+    demo4.$.parser.pause();
+  }
+};
+
+// manual trigger
+function start() {
+  demo4.buttonLabel = 'Resume';
+  demo4.$.parser.start();
+}
+</script>
+</template>
+</demo-snippet>
+
+Parsing with webworker (avoid blocking of UI thread with parsing of large files)
+<demo-snippet>
+<template>
+<input id="file5" type="file"></input>
+
+<dom-bind id="demo5">
+  <template>
+    <!--
+      parse csv with web worker.
+      you need to reference the papaparse.min.js properly for the webworker to
+      start properly.
+      you can also stream it (recommended).
+    -->
+    <papa-parse auto header worker
+      script-path="../../papaparse/papaparse.min.js"
+      fields="{{fields}}"
+      file="[[file]]"
+      rows="{{rows}}"></papa-parse>
+    <!-- there is no blank row now -->
+    <div>no. rows = [[rows.length]]</div>
+    <div>fields = </div>
+    <template is="dom-repeat" items="[[fields]]">
+      <div class="indent">[[item]]</div>
+    </template>
+    </table>
+  </template>
+</dom-bind>
+<script>
+var demo5 = document.querySelector('dom-bind#demo5');
+demo5.at = function(a, i) {
+  return a[i];
+};
+document.querySelector('input#file5').addEventListener('change', function(e) {
+  demo5.file = e.target.files[0];
+});
+</script>
+</template>
+</demo-snippet>
+
+</div>
+</body>
+</html>

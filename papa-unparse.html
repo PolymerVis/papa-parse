@@ -1,0 +1,206 @@
+<link rel="import" href="../polymer/polymer-element.html">
+<link rel="import" href="../polymer/lib/utils/debounce.html">
+
+<link rel="import" href="./papaparse.html">
+
+<!--
+`papa-unparse` is a Polymer 2.0 element to convert JSON arrays or objects into
+CSV strings with [Papa parse](http://papaparse.com/).
+
+### Basic usage
+For array of objects, e.g. [{col1: 1, col2: 2}, {col1: 3, col2: 4}]
+```html
+<papa-unparse header json-array="[[rows]]"></papa-unparse>
+```
+
+For array of arrays, e.g. [[1,2], [3,4]]
+```html
+<papa-unparse json-array="[[rows]]" fields="[[fields]]"></papa-unparse>
+```
+
+### Download as CSV file
+```html
+<papa-unparse header json-array="[[rows]]"></papa-unparse>
+<button onclick="javascript:download">Download</button>
+```
+```javascript
+function download() {
+  document.querySelector('papa-unparse').downloadCsv('somefile.csv');
+}
+```
+  
+### Other options
+```html
+<papa-unparse
+  header
+  quotes
+  quoteChar="'"
+  delimiter="|"
+  newline="\n"
+  json-array="[[rows]]"></papa-unparse>
+```
+
+@customElement
+@polymer
+@demo demo/unparse.html
+-->
+<dom-module id="papa-unparse">
+<script>
+class PapaUnparse extends Polymer.Element {
+  static get is() {
+    return 'papa-unparse';
+  }
+  static get properties() {
+    return {
+      /**
+       * whether to enclose all the fields with `quoteChar`.
+       * @type {Boolean}
+       */
+      quotes: {
+        type: Boolean,
+        value: false
+      },
+      /**
+       * character used to enclose all the fields with.
+       * @type {String}
+       */
+      quoteChar: {
+        type: String,
+        value: '"'
+      },
+      /**
+       * delimiter used to delimit the fields.
+       * @type {String}
+       */
+      delimiter: {
+        type: String,
+        value: ','
+      },
+      /**
+       * whether to include the header.
+       * @type {Boolean}
+       */
+      header: {
+        type: Boolean,
+        value: false
+      },
+      /**
+       * The newline sequence.
+       * @type {String}
+       */
+      newline: {
+        type: String,
+        value: '\r\n'
+      },
+      /**
+       * The data to transform. `json-array` can be one of the following:
+       * - An array of arrays: e.g. [['col1', 'col2'],[1, 2], [3, 4]]
+       * - An array of objects: e.g. [{col1:1, col2:2}, {col1:3, col2:4}]
+       *
+       * @type {Array}
+       */
+      jsonArray: {
+        type: Array
+      },
+      /**
+       * The header to insert if not already inside `json-array`. Only
+       * applicable when `json-array` is an array of arrays, where header
+       * is not included. e.g. [[1, 2], [3, 4]]] instead of
+       * [['col1', 'col2'],[1, 2], [3, 4]]
+       * @type {String[]}
+       */
+      fields: {
+        type: Array,
+        value: null
+      },
+      /**
+       * The CSV string produced from the JSON array.
+       * @type {String}
+       */
+      csvStr: {
+        type: String,
+        notify: true
+      },
+      /**
+       * @type {Polymer.Debouncer}
+       */
+      _debounceJob: {
+        type: Object
+      },
+      _config: {
+        type: Object,
+        value: function() {
+          return {};
+        }
+      }
+    };
+  }
+
+  static get observers() {
+    return [
+      '_unparse(jsonArray, fields, quotes, quoteChar, delimiter, header, newline)'
+    ];
+  }
+
+  /**
+   * Wrapper around `Papa.unparse`.
+   *
+   * @param {Array|Object} data
+   * @param {{quotes:Boolean, quoteChar:String, delimiter:String, header:Boolean, newline:String}} config
+   * @return {String}
+   */
+  unparse(data, config) {
+    if (!data) return;
+    return Papa.unparse(data, config);
+  }
+
+  /**
+   * Unparse and download the resultant `csv-str` as a csv file.
+   * @param {String} filename
+   * @param {Array|Object} data
+   * @param {{quotes:Boolean, quoteChar:String, delimiter:String, header:Boolean, newline:String}} config
+   */
+  downloadCsv(filename, data, config) {
+    var csvStr =
+      arguments.length >= 2 ? this.unparse(data, config) : this.csvStr;
+    filename = filename || 'data.csv';
+    var link = document.createElement('a');
+    link.setAttribute('href', 'data:text/csv,' + encodeURI(csvStr));
+    link.setAttribute('target', '_blank');
+    link.setAttribute('download', filename);
+    link.dispatchEvent(new MouseEvent('click'));
+  }
+
+  _unparse() {
+    this._debounceJob = Polymer.Debouncer.debounce(
+      this._debounceJob,
+      Polymer.Async.microTask,
+      () => {
+        if (!Array.isArray(this.jsonArray) || this.jsonArray.length === 0)
+          return;
+        let config = {
+          quotes: this.quotes,
+          quoteChar: this.quoteChar,
+          delimiter: this.delimiter,
+          header: this.header,
+          newline: this.newline
+        };
+        if (Array.isArray(this.fields) && Array.isArray(this.jsonArray[0])) {
+          this.csvStr = this.unparse(
+            {
+              fields: this.fields,
+              data: this.jsonArray
+            },
+            config
+          );
+        } else {
+          this.csvStr = this.unparse(this.jsonArray, config);
+        }
+      }
+    );
+  }
+}
+
+window.customElements.define(PapaUnparse.is, PapaUnparse);
+</script>
+</dom-module>

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, minimum-scale=1, initial-scale=1, user-scalable=yes">
+
+  <title>papa-parse demo</title>
+
+  <script src="../../webcomponentsjs/webcomponents-lite.js"></script>
+
+  <link rel="import" href="../../polymer/lib/elements/dom-bind.html">
+  <link rel="import" href="../../polymer/lib/elements/dom-repeat.html">
+  <link rel="import" href="../../iron-demo-helpers/demo-pages-shared-styles.html">
+  <link rel="import" href="../../iron-demo-helpers/demo-snippet.html">
+  <link rel="import" href="../papa-parse.html">
+  <link rel="import" href="../papa-unparse.html">
+
+  <custom-style>
+    <style is="custom-style" include="demo-pages-shared-styles">
+      table {
+        font-size: 11px;
+        background-color: #ddd;
+      }
+      tr {
+        height: 11px;
+      }
+      .indent {
+        padding-left: 10px;
+      }
+    </style>
+  </custom-style>
+</head>
+<body>
+<div class="vertical-section-container centered">
+<h3>Basic papa-unparse demo</h3>
+
+Unparse with array of array
+<demo-snippet>
+  <template>
+    <dom-bind>
+      <template>
+        <papa-parse auto url="MOCK_DATA.csv" rows="{{rows}}"></papa-parse>
+        <!--
+          e.g.
+          rows = [['col1', 'col2'], [1, 2], [3, 4]]
+        -->
+        <papa-unparse header json-array="[[rows]]" csv-str="{{csvStr}}"></papa-unparse>
+        <pre>[[csvStr]]</pre>
+      </template>
+    </dom-bind>
+  </template>
+</demo-snippet>
+
+Unparse with array of objects
+<demo-snippet>
+  <template>
+    <dom-bind>
+      <template>
+        <papa-parse auto header url="MOCK_DATA.csv" rows="{{rows}}"></papa-parse>
+        <!--
+          e.g.
+          rows = [{col1: 1, col2: 2}, {col1: 3, col2: 4}]
+        -->
+        <papa-unparse header json-array="[[rows]]" csv-str="{{csvStr}}"></papa-unparse>
+        <pre>[[csvStr]]</pre>
+      </template>
+    </dom-bind>
+  </template>
+</demo-snippet>
+
+
+Unparse with json-array and fields
+<demo-snippet>
+  <template>
+    <dom-bind>
+      <template>
+        <papa-parse auto url="MOCK_DATA.csv" rows="{{rows}}" fields="{{fields}}"></papa-parse>
+        <!--
+          e.g.
+          rows = [['col1','col2', 'col3'], [1,2,3], [4,5,6]]
+          fields = ['col1','col2', 'col3']
+
+          Note the additional header row
+        -->
+        <papa-unparse json-array="[[rows]]" fields="[[fields]]" csv-str="{{csvStr}}"></papa-unparse>
+        <pre>[[csvStr]]</pre>
+      </template>
+    </dom-bind>
+  </template>
+</demo-snippet>
+
+Download CSV
+<demo-snippet>
+  <template>
+    <dom-bind id="demo">
+      <template>
+        <papa-parse auto url="MOCK_DATA.csv" rows="{{rows}}" fields="{{fields}}"></papa-parse>
+        <papa-unparse id="unparse" json-array="[[rows]]" fields="[[fields]]"></papa-unparse>
+        <button onclick="javascript:download()">Download CSV</button>
+      </template>
+      <script>
+        var demo = document.querySelector('dom-bind#demo');
+        function download() {
+          demo.$.unparse.downloadCsv('somefile.csv');
+        }
+      </script>
+    </dom-bind>
+  </template>
+</demo-snippet>
+
+</div>
+</body>
+</html>
