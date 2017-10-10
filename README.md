@@ -65,7 +65,7 @@ PolymerVis is a personal project and is NOT in any way affliated with Papaparse,
 `papa-parse` is a Polymer 2.0 element to parse CSV files into JSON object(s)
 with [Papa parse](http://papaparse.com/).
 
-`papa-parse` can download and parse a csv file via `url`, or from raw csv strings via `raw`, and File object via `file`. If the `auto` flag is set, `papa-parse` will automatically start the job, otherwise a manual call to the function `parse` will be needed.
+`papa-parse` can download and parse a csv file via `url`, or from raw csv strings via `raw`, and File object via `file`. If the `auto` flag is set, `papa-parse` will automatically start the job, otherwise a manual call to the function `start` will be needed.
 
 Parse from URL.
 ```html

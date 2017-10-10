@@ -386,8 +386,9 @@ class PapaParse extends Polymer.Element {
   /**
    * If `auto` flag is not set, use this function to start the job manually.
    * Will resume parsing instead if parsing was paused previously.
-   * Only return results if `raw` is being parsed.
-   * @return {Array[]|Object[]|undefined}
+   * return results if `raw` is being parsed, otherwise return a Promise to the results
+   *
+   * @return {Array[]|Object[]|Promise}
    */
   start() {
     if (this.stream && this._parser) return this.resume();
@@ -425,30 +426,34 @@ class PapaParse extends Polymer.Element {
   }
 
   _parseRaw(raw, _config, run) {
-    if (!raw || !this._attached || !run) return;
+    if (!raw || !run) return;
     var results = Papa.parse(raw, _config);
     this._syncProperties(results);
     return results;
   }
 
   _parseFile(file, _config, run) {
-    if (!file || !this._attached || !run) return;
-    var config = Object.assign(
-      {complete: this._complete.bind(this)},
-      this._config
-    );
+    if (!file || !run) return;
+    return new Promise((resolve, reject) => {
+      let config = Object.assign(
+        {complete: this._complete(this, resolve, reject)},
+        this._config
+      );
 
-    Papa.parse(file, config);
+      Papa.parse(file, config);
+    });
   }
 
   _parseUrl(url, _config, run) {
-    if (!url || !this._attached || !run) return;
-    var config = Object.assign(
-      {download: true, complete: this._complete.bind(this)},
-      this._config
-    );
+    if (!url || !run) return;
+    return new Promise((resolve, reject) => {
+      let config = Object.assign(
+        {download: true, complete: this._complete(this, resolve, reject)},
+        this._config
+      );
 
-    Papa.parse(url, config);
+      Papa.parse(url, config);
+    });
   }
 
   _syncProperties(results) {
@@ -467,17 +472,26 @@ class PapaParse extends Polymer.Element {
     this.dispatchEvent(new CustomEvent('stream', {detail: results}));
   }
 
-  _complete(results) {
-    this._syncProperties(results);
+  _complete(self, resolve, reject) {
+    return function(results) {
+      this._syncProperties(results);
 
-    if (this.errors && this.errors.length > 0)
-      return this.dispatchEvent(new CustomEvent('errored', {detail: results}));
+      if (this.errors && this.errors.length > 0) {
+        this.dispatchEvent(new CustomEvent('errored', {detail: results}));
+        return reject(results);
+      }
 
-    if (results && results.meta && results.meta.aborted)
-      return this.dispatchEvent(new CustomEvent('aborted', {detail: results}));
+      if (results && results.meta && results.meta.aborted) {
+        this.dispatchEvent(new CustomEvent('aborted', {detail: results}));
+        return reject(results);
+      }
 
-    if (results)
-      this.dispatchEvent(new CustomEvent('completed', {detail: results}));
+      if (results) {
+        this.dispatchEvent(new CustomEvent('completed', {detail: results}));
+      }
+
+      resolve(results);
+    }.bind(self);
   }
 }
 
