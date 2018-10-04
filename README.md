@@ -1,7 +1,7 @@
 papa-parse
 [![GitHub release](https://img.shields.io/github/release/PolymerVis/papa-parse.svg)](https://github.com/PolymerVis/papa-parse/releases)
 [![Published on webcomponents.org](https://img.shields.io/badge/webcomponents.org-published-blue.svg)](https://www.webcomponents.org/element/PolymerVis/papa-parse)
-[![styled with prettier](https://img.shields.io/badge/styled_with-prettier-ff69b4.svg)](https://github.com/prettier/prettier)
+[![styled with prettier](https://img.shields.io/badge/styled_with-prettier-ff69b4.svg)](https://github.com/prettier/prettier) [![Greenkeeper badge](https://badges.greenkeeper.io/PolymerVis/papa-parse.svg)](https://greenkeeper.io/)
 ==========
 
 <!---
